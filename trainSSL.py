@@ -190,12 +190,8 @@ def _save_checkpoint(iteration, model, optimizer, config, ema_model, save_best=F
     }
     if len(gpus) > 1:
         checkpoint['model'] = model.module.state_dict()
-        if config['model'] != 'dynamic_routing' and train_unlabeled:
-            checkpoint['ema_model'] = ema_model.module.state_dict()
     else:
         checkpoint['model'] = model.state_dict()
-        if config['model'] != 'dynamic_routing' and train_unlabeled:
-            checkpoint['ema_model'] = ema_model.state_dict()
 
     if save_best:
         filename = os.path.join(checkpoint_dir, f'best_model.pth')
@@ -226,16 +222,12 @@ def _resume_checkpoint(resume_path, model, optimizer, ema_model):
         model.load_state_dict(checkpoint['model'])
 
     optimizer.load_state_dict(checkpoint['optimizer'])
-    if config['model'] != 'dynamic_routing' and train_unlabeled:
-        if len(gpus) > 1:
-            ema_model.module.load_state_dict(checkpoint['ema_model'])
-        else:
-            ema_model.load_state_dict(checkpoint['ema_model'])
 
     return iteration, model, optimizer, ema_model
 
 
 def main(config):
+    print("batch_size:",config['training']['batch_size'],"lr:",config['SOLVER']['OPTIMIZER']['BASE_LR'])
     print(config)
     best_mIoU = 0
 
@@ -521,12 +513,12 @@ def main(config):
             alpha_teacher = 0.99
             ema_model = update_ema_variables(ema_model=ema_model, model=model, alpha_teacher=alpha_teacher,
                                              iteration=i_iter)
-
+        '''
         if train_unlabeled:
             print('iter = {0:6d}/{1:6d}, loss_l = {2:.3f}, loss_u = {3:.3f}'.format(i_iter, num_iterations, loss_l_value,loss_u_value))
         else:
             print('iter = {0:6d}/{1:6d}, loss_l = {2:.3f}'.format(i_iter, num_iterations, loss_l_value))
-
+        '''
         if i_iter % save_checkpoint_every == 0 and i_iter != 0:
             _save_checkpoint(i_iter, model, optimizer, config, ema_model)
 
@@ -593,11 +585,11 @@ if __name__ == '__main__':
     print('---------------------------------Starting---------------------------------')
 
     args = get_arguments()
-
     if args.resume:
         config = torch.load(args.resume)['config']
     else:
         config = json.load(open(args.config))
+        print(args.config)
 
     model = config['model']
     dataset = config['dataset']

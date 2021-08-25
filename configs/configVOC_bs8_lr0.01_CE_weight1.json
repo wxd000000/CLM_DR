@@ -6,7 +6,7 @@
     "pretrained":false,
     "seed": 1,
     "training": {
-        "batch_size": 4,
+        "batch_size": 8,
         "data": {
             "crop": false,
             "input_size": "320,320",
@@ -25,7 +25,7 @@
             "blur": false,
             "color_jitter": false,
             "consistency_loss": "CE",
-            "consistency_weight": 10,
+            "consistency_weight": 1,
             "flip": false,
             "pixel_weight": "threshold_uniform",
             "mix_mask": "class"

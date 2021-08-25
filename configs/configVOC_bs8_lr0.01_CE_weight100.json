@@ -6,7 +6,7 @@
     "pretrained":false,
     "seed": 1,
     "training": {
-        "batch_size": 4,
+        "batch_size": 8,
         "data": {
             "crop": false,
             "input_size": "320,320",

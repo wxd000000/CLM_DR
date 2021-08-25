@@ -6,7 +6,7 @@
     "pretrained":false,
     "seed": 1,
     "training": {
-        "batch_size": 4,
+        "batch_size": 8,
         "data": {
             "crop": false,
             "input_size": "320,320",
@@ -14,7 +14,7 @@
             "scale": true,
             "split_id_list": 0
         },
-        "learning_rate": 0.01,
+        "learning_rate": 0.001,
         "lr_schedule": "Poly",
         "lr_schedule_power": 0.9,
         "momentum": 0.9,
@@ -25,7 +25,7 @@
             "blur": false,
             "color_jitter": false,
             "consistency_loss": "CE",
-            "consistency_weight": 10,
+            "consistency_weight": 1,
             "flip": false,
             "pixel_weight": "threshold_uniform",
             "mix_mask": "class"
@@ -39,7 +39,7 @@
         "save_best_model": false,
         "save_checkpoint_every": 1000,
         "tensorboard": true,
-        "val_per_iter": 5000
+        "val_per_iter": 4000
     },
     "MODEL": {
         "DEVICE":"cuda",
@@ -88,7 +88,7 @@
             "WEIGHT_DECAY_BIAS": 0.0001,
             "SUBDIVISION": 1,
             "MOMENTUM": 0.9,
-            "BASE_LR": 0.01
+            "BASE_LR": 0.001
         }
     },
     "INPUT" : {

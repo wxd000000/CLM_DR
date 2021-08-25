@@ -6,7 +6,7 @@
     "pretrained":false,
     "seed": 1,
     "training": {
-        "batch_size": 4,
+        "batch_size": 1,
         "data": {
             "crop": false,
             "input_size": "320,320",
@@ -19,13 +19,13 @@
         "lr_schedule_power": 0.9,
         "momentum": 0.9,
         "num_iterations": 100000,
-        "num_workers": 8,
+        "num_workers": 1,
         "optimizer": "SGD",
         "unlabeled": {
             "blur": false,
             "color_jitter": false,
             "consistency_loss": "CE",
-            "consistency_weight": 1,
+            "consistency_weight": 10,
             "flip": false,
             "pixel_weight": "threshold_uniform",
             "mix_mask": "class"
@@ -39,7 +39,7 @@
         "save_best_model": false,
         "save_checkpoint_every": 1000,
         "tensorboard": true,
-        "val_per_iter": 5000
+        "val_per_iter": 5
     },
     "MODEL": {
         "DEVICE":"cuda",
