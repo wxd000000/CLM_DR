@@ -11,7 +11,9 @@ from dl_lib.modeling.nn_utils import weight_init
 from dl_lib.modeling.postprocessing import sem_seg_postprocess
 from dl_lib.structures import ImageList
 from dl_lib.modeling.dynamic_arch import cal_op_flops
-
+from dl_lib.modeling.dynamic_arch import cal_op_flops
+from dl_lib.modeling.dynamic_arch.dynamic_backbone import build_dynamic_backbone
+from dl_lib.modeling.backbone import Backbone
 __all__ = ["DynamicNet4Seg", "SemSegDecoderHead", "BudgetConstraint"]
 
 
@@ -19,23 +21,23 @@ class DynamicNet4Seg(nn.Module):
     """
     This module implements Dynamic Network for Semantic Segmentation.
     """
-    def __init__(self, cfg):
+    def __init__(self, config):
         super().__init__()
-        self.constrain_on = cfg.MODEL.BUDGET.CONSTRAIN
-        self.unupdate_rate = cfg.MODEL.BUDGET.UNUPDATE_RATE
-        self.device = torch.device(cfg.MODEL.DEVICE)
-        self.backbone = cfg.build_backbone(cfg)
-        self.sem_seg_head = cfg.build_sem_seg_head(
-            cfg, self.backbone.output_shape())
-        pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(
+        self.constrain_on = config['MODEL']['BUDGET']['CONSTRAIN']
+        self.unupdate_rate = config['MODEL']['BUDGET']['UNUPDATE_RATE']
+        self.device = torch.device(config['MODEL']['DEVICE'])
+        self.backbone = build_backbone(config)
+        self.sem_seg_head = build_sem_seg_head(
+            config, self.backbone.output_shape())
+        pixel_mean = torch.Tensor(config['MODEL']['PIXEL_MEAN']).to(self.device).view(
             -1, 1, 1)
-        pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(
+        pixel_std = torch.Tensor(config['MODEL']['PIXEL_STD']).to(self.device).view(
             -1, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
-        self.budget_constrint = BudgetConstraint(cfg)
+        self.budget_constrint = BudgetConstraint(config)
         self.to(self.device)
 
-    def forward(self, batched_inputs, step_rate=0.0):
+    def forward(self, images, targets=None, step_rate=0.0):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -54,25 +56,14 @@ class DynamicNet4Seg(nn.Module):
                 Tensor of the output resolution that represents the
                 per-pixel segmentation prediction.
         """
-        images = [x["image"].to(self.device) for x in batched_inputs]
-        images = [self.normalizer(x) for x in images]
-        images = ImageList.from_tensors(images,self.backbone.size_divisibility)
-        features, expt_flops, real_flops, gate_list, gate_weight_list= self.backbone(images.tensor, step_rate)
-
-        if "sem_seg" in batched_inputs[0]:
-            targets = [x["sem_seg"].to(self.device) for x in batched_inputs]
-            targets = ImageList.from_tensors(
-                targets, self.backbone.size_divisibility,
-                self.sem_seg_head.ignore_value).tensor
-        else:
-            targets = None
+        features, expt_flops, real_flops, gate_list, gate_weight_list= self.backbone(images, step_rate)
 
         results, losses = self.sem_seg_head(features, targets)
         # calculate flops
         real_flops += self.sem_seg_head.flops
         flops = {'real_flops': real_flops, 'expt_flops': expt_flops}
         # use budget constraint for training
-        if self.training:
+        if self.training and targets is not None:
             if self.constrain_on and step_rate >= self.unupdate_rate:
                 warm_up_rate = min(
                     1.0, (step_rate - self.unupdate_rate) / 0.02
@@ -82,15 +73,7 @@ class DynamicNet4Seg(nn.Module):
                 )
                 losses.update({'loss_budget': loss_budget})
             return losses, flops
-
-        processed_results = []
-        for result, input_per_image, image_size in zip(results, batched_inputs,
-                                                       images.image_sizes):
-            height = input_per_image.get("height")
-            width = input_per_image.get("width")
-            r = sem_seg_postprocess(result, image_size, height, width)
-            processed_results.append({"sem_seg": r, "flops": flops})
-        return processed_results
+        return results
 
 
 class SemSegDecoderHead(nn.Module):
@@ -98,21 +81,21 @@ class SemSegDecoderHead(nn.Module):
     This module implements simple decoder head for Semantic Segmentation.
     It creats decoder on top of the dynamic backbone.
     """
-    def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
+    def __init__(self, config, input_shape: Dict[str, ShapeSpec]):
         super().__init__()
         # fmt: off
-        self.in_features = cfg.MODEL.SEM_SEG_HEAD.IN_FEATURES
+        self.in_features = config['MODEL']['SEM_SEG_HEAD']['IN_FEATURES']
         feature_strides = {k: v.stride for k, v in input_shape.items()}  # noqa:F841
         feature_channels = {k: v.channels for k, v in input_shape.items()}
         feature_resolution = {
             k: np.array([v.height, v.width])
             for k, v in input_shape.items()
         }
-        self.ignore_value = cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE
-        num_classes = cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES
-        norm = cfg.MODEL.SEM_SEG_HEAD.NORM
-        self.loss_weight = cfg.MODEL.SEM_SEG_HEAD.LOSS_WEIGHT
-        self.cal_flops = cfg.MODEL.CAL_FLOPS
+        self.ignore_value = config['MODEL']['SEM_SEG_HEAD']['IGNORE_VALUE']
+        num_classes = config['MODEL']['SEM_SEG_HEAD']['NUM_CLASSES']
+        norm = config['MODEL']['SEM_SEG_HEAD']['NORM']
+        self.loss_weight = config['MODEL']['SEM_SEG_HEAD']['LOSS_WEIGHT']
+        self.cal_flops = config['MODEL']['CAL_FLOPS']
         self.real_flops = 0.0
         # fmt: on
 
@@ -188,7 +171,7 @@ class SemSegDecoderHead(nn.Module):
                                     mode='bilinear',
                                     align_corners=False)
 
-        if self.training:
+        if self.training and targets is not None:
             losses = {}
             losses["loss_sem_seg"] = (
                 F.cross_entropy(
@@ -209,13 +192,13 @@ class BudgetConstraint(nn.Module):
     """
     Given budget constraint to reduce expected inference FLOPs in the Dynamic Network.
     """
-    def __init__(self, cfg):
+    def __init__(self, config):
         super().__init__()
         # fmt: off
-        self.loss_weight = cfg.MODEL.BUDGET.LOSS_WEIGHT
-        self.loss_mu = cfg.MODEL.BUDGET.LOSS_MU
-        self.flops_all = cfg.MODEL.BUDGET.FLOPS_ALL
-        self.warm_up = cfg.MODEL.BUDGET.WARM_UP
+        self.loss_weight = config['MODEL']['BUDGET']['LOSS_WEIGHT']
+        self.loss_mu = config['MODEL']['BUDGET']['LOSS_MU']
+        self.flops_all = config['MODEL']['BUDGET']['FLOPS_ALL']
+        self.warm_up = config['MODEL']['BUDGET']['WARM_UP']
         # fmt: on
 
     def forward(self, flops_expt, warm_up_rate=1.0):
@@ -227,3 +210,25 @@ class BudgetConstraint(nn.Module):
             (flops_expt / self.flops_all - self.loss_mu)**2
         )
         return losses
+
+
+
+def build_backbone(config, input_shape=None):
+    """
+    Build a backbone from `config['MODEL.BACKBONE.NAME`.
+
+    Returns:
+        an instance of :class:`Backbone`
+    """
+    if input_shape is None:
+        input_shape = ShapeSpec(channels=len(config['MODEL']['PIXEL_MEAN']),
+                                height=config['INPUT']['FIX_SIZE_FOR_FLOPS'][0],
+                                width=config['INPUT']['FIX_SIZE_FOR_FLOPS'][1])
+
+    backbone = build_dynamic_backbone(config, input_shape)
+    assert isinstance(backbone, Backbone)
+    return backbone
+
+
+def build_sem_seg_head(config, input_shape=None):
+    return SemSegDecoderHead(config, input_shape)

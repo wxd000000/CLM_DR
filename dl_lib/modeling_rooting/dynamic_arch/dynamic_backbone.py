@@ -114,11 +114,11 @@ class DynamicStem(nn.Module):
         for layer in [self.stem_1, self.stem_2, self.stem_3]:
             weight_init.kaiming_init_module(layer, mode='fan_in')
 
-    def forward(self, x):  # torch.Size([1, 3, 768, 768])
+    def forward(self, x):
         x = self.stem_1(x)
         x = self.stem_2(x)
         x = self.stem_3(x)
-        return x  # torch.Size([1, 64, 192, 192])
+        return x
 
     @property
     def out_channels(self):
@@ -244,9 +244,9 @@ class DynamicNetwork(Backbone):
         return self._size_divisibility
 
     def forward(self, x, step_rate=0.0):
-        h_l1 = self.stem(x)  # torch.Size([1, 64, 192, 192])
+        h_l1 = self.stem(x)
         # the initial layer
-        h_l1_list, h_beta_list, trans_flops, trans_flops_real,gate = self.init_layer(h_l1=h_l1)
+        h_l1_list, h_beta_list, trans_flops, trans_flops_real,gate_mask = self.init_layer(h_l1=h_l1)
         prev_beta_list, prev_out_list = [h_beta_list], [h_l1_list]  # noqa: F841
         prev_trans_flops, prev_trans_flops_real = [trans_flops], [trans_flops_real]
         prev_gate_list, prev_gate_weight_list = [], []
@@ -254,9 +254,9 @@ class DynamicNetwork(Backbone):
         cell_flops_list, cell_flops_real_list = [], []
         for layer_index in range(len(self.cell_num_list)):
             layer_input, layer_output = [], []
-            layer_gate, layer_gate_weights = [], []
             layer_trans_flops, layer_trans_flops_real = [], []
             flops_in_expt_list, flops_in_real_list = [], []
+            layer_gate, layer_gate_weights = [], []
             layer_rate = (layer_index + 1) / float(len(self.cell_num_list))
             # aggregate cell input
             for cell_index in range(len(self.all_cell_type_list[layer_index])):
@@ -299,7 +299,7 @@ class DynamicNetwork(Backbone):
                     cell_flops_list.append(cell_flops)
                     cell_flops_real_list.append(cell_flops_real)
                 else:
-                    cell_output, gate_weights_beta, trans_flops, trans_flops_real, gate_mask = \
+                    cell_output, gate_weights_beta, trans_flops, trans_flops_real = \
                         self.all_cell_list[layer_index][_cell_index](
                             h_l1=layer_input[_cell_index],
                             flops_in_expt=flops_in_expt_list[_cell_index],
@@ -308,8 +308,8 @@ class DynamicNetwork(Backbone):
                             layer_rate=layer_rate, step_rate=step_rate
                         )
                 layer_gate.append(gate_mask)
-                layer_gate_weights.append(gate_weights_beta)
                 layer_output.append(cell_output)
+                layer_gate_weights.append(gate_weights_beta)
                 # update trans flops output
                 layer_trans_flops.append(trans_flops)
                 layer_trans_flops_real.append(trans_flops_real)
@@ -341,7 +341,7 @@ class DynamicNetwork(Backbone):
         }
 
 
-def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
+def build_dynamic_backbone(config, input_shape: ShapeSpec):
     """
     Create a Dynamic Backbone from config.
     Args:
@@ -350,21 +350,21 @@ def build_dynamic_backbone(cfg, input_shape: ShapeSpec):
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
     if input_shape is None:
-        input_shape = ShapeSpec(channels=len(cfg.MODEL.PIXEL_MEAN))
+        input_shape = ShapeSpec(channels=len(config['MODEL']['PIXEL_MEAN']))
     backbone = DynamicNetwork(
-        init_channel=cfg.MODEL.BACKBONE.INIT_CHANNEL,
+        init_channel=config['MODEL']['BACKBONE']['INIT_CHANNEL'],
         input_shape=input_shape,
-        cell_num_list=cfg.MODEL.BACKBONE.CELL_NUM_LIST,
-        layer_num=cfg.MODEL.BACKBONE.LAYER_NUM,
-        norm=cfg.MODEL.BACKBONE.NORM,
-        cal_flops=cfg.MODEL.CAL_FLOPS,
-        cell_type=cfg.MODEL.BACKBONE.CELL_TYPE,
-        max_stride=cfg.MODEL.BACKBONE.MAX_STRIDE,
-        sep_stem=cfg.MODEL.BACKBONE.SEPT_STEM,
-        using_gate=cfg.MODEL.GATE.GATE_ON,
-        small_gate=cfg.MODEL.GATE.SMALL_GATE,
-        gate_bias=cfg.MODEL.GATE.GATE_INIT_BIAS,
-        drop_prob=cfg.MODEL.BACKBONE.DROP_PROB
+        cell_num_list=config['MODEL']['BACKBONE']['CELL_NUM_LIST'],
+        layer_num=config['MODEL']['BACKBONE']['LAYER_NUM'],
+        norm=config['MODEL']['BACKBONE']['NORM'],
+        cal_flops=config['MODEL']['CAL_FLOPS'],
+        cell_type=config['MODEL']['BACKBONE']['CELL_TYPE'],
+        max_stride=config['MODEL']['BACKBONE']['MAX_STRIDE'],
+        sep_stem=config['MODEL']['BACKBONE']['SEPT_STEM'],
+        using_gate=config['MODEL']['GATE']['GATE_ON'],
+        small_gate=config['MODEL']['GATE']['SMALL_GATE'],
+        gate_bias=config['MODEL']['GATE']['GATE_INIT_BIAS'],
+        drop_prob=config['MODEL']['BACKBONE']['DROP_PROB']
     )
 
     return backbone

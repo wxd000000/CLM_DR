@@ -1,0 +1,100 @@
+{
+    "dataset": "pascal_voc",
+    "train_unlabeled": true,
+    "ignore_label": 255,
+    "model": "dynamic_routing",
+    "pretrained":false,
+    "seed": 1,
+    "training": {
+        "batch_size": 8,
+        "data": {
+            "crop": false,
+            "input_size": "320,320",
+            "labeled_samples": 1323,
+            "scale": true,
+            "split_id_list": 0
+        },
+        "learning_rate": 0.05,
+        "lr_schedule": "Poly",
+        "lr_schedule_power": 0.9,
+        "momentum": 0.9,
+        "num_iterations": 100000,
+        "num_workers": 8,
+        "optimizer": "SGD",
+        "unlabeled": {
+            "blur": false,
+            "color_jitter": false,
+            "consistency_loss": "CE",
+            "consistency_weight": 1,
+            "flip": false,
+            "pixel_weight": "threshold_uniform",
+            "mix_mask": "class"
+        },
+        "use_sync_batchnorm": true,
+        "weight_decay": 0.0005
+    },
+    "utils": {
+        "checkpoint_dir": "saved/DR",
+        "log_per_iter": 200,
+        "save_best_model": false,
+        "save_checkpoint_every": 1000,
+        "tensorboard": true,
+        "val_per_iter": 4000
+    },
+    "MODEL": {
+        "DEVICE":"cuda",
+        "WEIGHTS":"",
+        "CAL_FLOPS": true,
+        "PIXEL_MEAN": [103.530, 116.280, 123.675],
+        "PIXEL_STD": [1.0, 1.0, 1.0],
+        "BACKBONE": {
+            "CELL_TYPE":["sep_conv_3x3", "skip_connect"],
+            "LAYER_NUM": 16,
+            "CELL_NUM_LIST": [2, 3, 4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+            "INIT_CHANNEL": 64,
+            "MAX_STRIDE": 32,
+            "SEPT_STEM": true,
+            "NORM": "nnSyncBN",
+            "DROP_PROB": 0.0
+        },
+        "GATE": {
+            "GATE_ON": true,
+            "GATE_INIT_BIAS": 1.5,
+            "SMALL_GATE": false
+        },
+        "SEM_SEG_HEAD": {
+            "IN_FEATURES": ["layer_0", "layer_1","layer_2","layer_3"],
+            "NUM_CLASSES": 21,
+            "IGNORE_VALUE": 255,
+            "NORM": "nnSyncBN",
+            "LOSS_WEIGHT": 1.0
+        },
+        "BUDGET": {
+            "CONSTRAIN": false,
+            "LOSS_WEIGHT": 0.0,
+            "LOSS_MU": 0.0,
+            "FLOPS_ALL": 26300.0,
+            "UNUPDATE_RATE": 0.4,
+            "WARM_UP": true
+        }
+    },
+    "SOLVER" : {
+        "OPTIMIZER": {
+            "NAME": "SGD",
+            "BIAS_LR_FACTOR": 0.001,
+            "c": 1.0,
+            "WEIGHT_DECAY": 0.0001,
+            "WEIGHT_DECAY_NORM": 0.0,
+            "WEIGHT_DECAY_BIAS": 0.0001,
+            "SUBDIVISION": 1,
+            "MOMENTUM": 0.9,
+            "BASE_LR": 0.05
+        }
+    },
+    "INPUT" : {
+        "FIX_SIZE_FOR_FLOPS": [320, 320],
+        "CROP_PAD": {
+            "SIZE":[320, 320]
+        }
+    }
+}

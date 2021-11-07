@@ -49,10 +49,9 @@ class Mixed_OP(nn.Module):
     """
     Sum up operations according to their weights.
     """
-
     def __init__(
-            self, inplanes, outplanes, stride, cell_type,
-            norm='', affine=True, input_size=None
+        self, inplanes, outplanes, stride, cell_type,
+        norm='', affine=True, input_size=None
     ):
         super(Mixed_OP, self).__init__()
         self._ops = nn.ModuleList()
@@ -86,9 +85,9 @@ class Mixed_OP(nn.Module):
 
 class Cell(nn.Module):
     def __init__(
-            self, C_in, C_out, norm, allow_up, allow_down, input_size,
-            cell_type, cal_flops=True, using_gate=False,
-            small_gate=False, gate_bias=1.5, affine=True
+        self, C_in, C_out, norm, allow_up, allow_down, input_size,
+        cell_type, cal_flops=True, using_gate=False,
+        small_gate=False, gate_bias=1.5, affine=True
     ):
         super(Cell, self).__init__()
         self.channel_in = C_in
@@ -156,7 +155,7 @@ class Cell(nn.Module):
             self.gate_num = 2
         else:
             self.gate_num = 1
-        if self.using_gate:  # [1, 64, 192, 192]
+        if self.using_gate:
             self.gate_conv_beta = nn.Sequential(
                 Conv2d(
                     self.channel_in, self.channel_in // 2, kernel_size=1,
@@ -191,9 +190,9 @@ class Cell(nn.Module):
             self.gate_flops = 0.0
 
     def forward(
-            self, h_l1, flops_in_expt=None, flops_in_real=None,
-            is_drop_path=False, drop_prob=0.0,
-            layer_rate=0.0, step_rate=0.0
+        self, h_l1, flops_in_expt=None, flops_in_real=None,
+        is_drop_path=False, drop_prob=0.0,
+        layer_rate=0.0, step_rate=0.0
     ):
         """
         :param h_l1: # the former hidden layer output
@@ -210,9 +209,9 @@ class Cell(nn.Module):
                         mode='bilinear', align_corners=False
                     )
                 else:
-                    h_l1_gate = h_l1  # torch.Size([1, 64, 192, 192])
-                gate_feat_beta = self.gate_conv_beta(h_l1_gate)  # [1, 64, 192, 192]
-                gate_weights_beta = soft_gate(gate_feat_beta)  # [bs,2,1,1]
+                    h_l1_gate = h_l1
+                gate_feat_beta = self.gate_conv_beta(h_l1_gate)
+                gate_weights_beta = soft_gate(gate_feat_beta)
             else:
                 gate_weights_beta = self.gate_weights_beta
         else:
@@ -243,12 +242,12 @@ class Cell(nn.Module):
 
         # resolution and dimension change
         # resolution: [up, keep, down]
-        h_l_keep = self.res_keep(h_l)  # [2, 64, 192, 192]
-        gate_weights_beta_keep = gate_weights_beta[:, 0].unsqueeze(-1)  # [bs, 2/3, 1, 1]
+        h_l_keep = self.res_keep(h_l)
+        gate_weights_beta_keep = gate_weights_beta[:, 0].unsqueeze(-1)
         # using residual connection if drop cell
-        gate_mask = (gate_weights_beta.sum(dim=1, keepdim=True) < 0.0001).float()
+        gate_mask = (gate_weights_beta.sum(dim=1, keepdim=True) < 0.0001).item()
         result_list = [[], [gate_mask * h_l1 + gate_weights_beta_keep * h_l_keep], []]
-        weights_list_beta = [[], [gate_mask * 1.0 + gate_weights_beta_keep], []]
+        weights_list_beta = [[], [(gate_mask * 1.0 + gate_weights_beta_keep).item()], []]
         # calculate flops for keep res
         gate_mask_keep = (gate_weights_beta_keep > 0.0001).float()
         trans_flops_real = [[], [gate_mask_keep * self.res_keep_flops], []]
@@ -257,34 +256,37 @@ class Cell(nn.Module):
 
         if self.allow_up:
             h_l_up = self.res_up(h_l)
-            h_l_up = F.interpolate(input=h_l_up, scale_factor=2, mode='bilinear', align_corners=False)
+            h_l_up = F.interpolate(
+                input=h_l_up, scale_factor=2, mode='bilinear', align_corners=False
+            )
             gate_weights_beta_up = gate_weights_beta[:, 1].unsqueeze(-1)
             result_list[0].append(h_l_up * gate_weights_beta_up)
-            weights_list_beta[0].append(gate_weights_beta_up)
+            weights_list_beta[0].append(gate_weights_beta_up.item())
             trans_flops_expt[0].append(self.res_up_flops * gate_weights_beta_up)
             # calculate flops for up res
             gate_mask_up = (gate_weights_beta_up > 0.0001).float()
             trans_flops_real[0].append(gate_mask_up * self.res_up_flops)
 
         if self.allow_down:
-            h_l_down = self.res_down(h_l)  # [1, 64, 192, 192] -- [1, 128, 96, 96]
+            h_l_down = self.res_down(h_l)
             gate_weights_beta_down = gate_weights_beta[:, -1].unsqueeze(-1)
             result_list[2].append(h_l_down * gate_weights_beta_down)
-            weights_list_beta[2].append(gate_weights_beta_down)
+            weights_list_beta[2].append(gate_weights_beta_down.item())
             trans_flops_expt[2].append(self.res_down_flops * gate_weights_beta_down)
             # calculate flops for down res
             gate_mask_down = (gate_weights_beta_down > 0.0001).float()
             trans_flops_real[2].append(gate_mask_down * self.res_down_flops)
+
         if self.cal_flops:
             cell_flops = gate_weights_beta.max(dim=1, keepdim=True)[0] * self.cell_flops
             cell_flops_real = (
-                                      gate_weights_beta.sum(dim=1, keepdim=True) > 0.0001
-                              ).float() * self.cell_flops
+                gate_weights_beta.sum(dim=1, keepdim=True) > 0.0001
+            ).float() * self.cell_flops
             h_l_flops = cell_flops + flops_in_expt
             h_l_flops_real = cell_flops_real + flops_in_real + self.gate_flops
             return (
                 result_list, weights_list_beta, h_l_flops,
-                h_l_flops_real, trans_flops_expt, trans_flops_real, gate_mask
+                h_l_flops_real, trans_flops_expt, trans_flops_real,gate_mask
             )
         else:
-            return result_list, weights_list_beta, trans_flops_expt, trans_flops_real, gate_mask
+            return result_list, weights_list_beta, trans_flops_expt, trans_flops_real,gate_mask

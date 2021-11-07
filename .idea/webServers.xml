@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="56718131-fcee-43ae-8371-71c1a8b67236" name="clm_dr" url="http://localhost">
+        <fileTransfer rootFolder="/mnt" accessType="SFTP" host="hz.matpool.com" port="29872" sshConfigId="f7e8c570-d2dc-4df8-aa48-b0f3f7231cd8" sshConfig="root@hz.matpool.com:29872 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
